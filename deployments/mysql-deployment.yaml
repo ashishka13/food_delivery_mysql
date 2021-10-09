@@ -1,0 +1,66 @@
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: karmarkar
+  name: central-mysql-service
+spec:
+  type: ClusterIP
+  ports:
+    - name: "3306"
+      port: 3306
+      targetPort: 3306
+      protocol: TCP
+  selector:
+    tier: mysql
+  clusterIP: 10.97.49.8
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  namespace: karmarkar
+  name: mysql-pv-claim
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 4Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: karmarkar
+  name: central-mysql
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      tier: mysql
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      namespace: karmarkar
+      labels:
+        tier: mysql
+    spec:
+      containers:
+      - image: mysql:8.0
+        name: mysql
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          value: ashish
+        ports:
+        - containerPort: 3306
+          name: mysql
+        volumeMounts:
+        - name: mysql-persistent-storage
+          mountPath: /var/lib/mysql
+        resources:
+          limits:
+            memory: "128Mi"
+            cpu: "500m"
+      volumes:
+      - name: mysql-persistent-storage
+        persistentVolumeClaim:
+          claimName: mysql-pv-claim
