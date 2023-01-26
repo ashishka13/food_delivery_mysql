@@ -1,7 +1,8 @@
 {
-    "mysql_host" : "10.97.49.8",
-    "mysql_user" : "root",
-    "mysql_password" : "ashish" ,
-    "mysql_port" : "3306",
-    "mysql_db" : "fooddelivery"
+    "mysql_host": "localhost",
+    "mysql_user": "root",
+    "mysql_password": "my-secret-password",
+    "mysql_port": "3306",
+    "mysql_db": "ds",
+    "network_type": "tcp"
 }

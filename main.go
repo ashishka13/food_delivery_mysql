@@ -1,15 +1,14 @@
 package main
 
 import (
-	"foodDelivery/controller"
-	"foodDelivery/processor"
+	"food_delivery_mysql/controller"
 	"log"
 )
 
-func main() {
+func init() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
-	go processor.MainProcessor() // very useful for interval polling
+}
 
-	controller.MyController()
-	// select {} // this will cause the program to run forever
+func main() {
+	controller.Controller()
 }

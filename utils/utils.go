@@ -1,19 +1,16 @@
 package utils
 
 import (
-	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"food_delivery_mysql/models"
 	"io/ioutil"
 	"log"
 	"net"
-	"time"
 
-	_ "github.com/go-sql-driver/mysql" // this is mysql driver import
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"github.com/go-sql-driver/mysql"
 )
 
 func init() {
@@ -21,83 +18,35 @@ func init() {
 }
 
 type mysqlSecret struct {
-	Mysql_host     string `json:"mysql_host"`
-	Mysql_user     string `json:"mysql_user"`
-	Mysql_password string `json:"mysql_password"`
-	Mysql_port     string `json:"mysql_port"`
-	Mysql_db       string `json:"mysql_db"`
-}
-
-// InitializeDatabase will establish database connection
-func InitializeDatabase() (err error) {
-	idpassword, err := getMysqlVars()
-	if err != nil {
-		return
-	}
-	dbUser := idpassword.Mysql_user
-	dbPass := idpassword.Mysql_password
-	dbName := idpassword.Mysql_db
-	dbHost := idpassword.Mysql_host
-	dbPort := idpassword.Mysql_port
-
-	dburl1 := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", dbUser, dbPass, dbHost, dbPort, "")
-
-	db, err := sql.Open("mysql", dburl1)
-	if err != nil {
-		log.Printf("Error %s when opening DB\n", err)
-		return
-	}
-
-	ctx, cancelfunc := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancelfunc()
-	res, err := db.ExecContext(ctx, "CREATE DATABASE IF NOT EXISTS "+dbName)
-	if err != nil {
-		log.Printf("Error %s when creating DB\n", err)
-		return
-	}
-	_, err = res.RowsAffected()
-	if err != nil {
-		log.Printf("Error %s when fetching rows", err)
-		return
-	}
-
-	dburl := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", dbUser, dbPass, dbHost, dbPort, dbName)
-	db, err = sql.Open("mysql", dburl)
-	log.Println("database connectin error ping db ", err)
-	if err != nil {
-		log.Println("database connection error")
-		return
-	}
-
-	_, err = db.Exec("CREATE TABLE students (id int NOT NULL AUTO_INCREMENT, fname varchar(255) NOT NULL, lname varchar(255), PRIMARY KEY (id))")
-	if err != nil {
-		log.Printf("Error %s when creating DB\n", err)
-		return
-	}
-	defer db.Close()
-
-	return
+	MysqlHost     string `json:"mysql_host"`
+	MysqlUser     string `json:"mysql_user"`
+	MysqlPassword string `json:"mysql_password"`
+	MysqlPort     string `json:"mysql_port"`
+	MysqlDBName   string `json:"mysql_db_name"`
+	NetworkType   string `json:"network_type"`
 }
 
 func Database() (db *sql.DB, err error) {
-	idpassword, err := getMysqlVars()
-	if err != nil {
-		return
+	cfg := mysql.Config{
+		User:                 "root",
+		Passwd:               "my-secret-password",
+		Net:                  "tcp",
+		Addr:                 "127.0.0.1:3306",
+		DBName:               "food_delivery",
+		AllowNativePasswords: true,
 	}
-	dbUser := idpassword.Mysql_user
-	dbPass := idpassword.Mysql_password
-	dbName := idpassword.Mysql_db
-	dbHost := idpassword.Mysql_host
-	dbPort := idpassword.Mysql_port
+	// Get a database handle.
+	db, err = sql.Open("mysql", cfg.FormatDSN())
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	dburl := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", dbUser, dbPass, dbHost, dbPort, dbName)
-	db, err = sql.Open("mysql", dburl)
-	log.Println("database connectin error ping db ", err)
-	if err != nil {
-		log.Println("database connection error")
-		return
+	pingErr := db.Ping()
+	if pingErr != nil {
+		log.Fatal(pingErr)
 	}
-	return
+	fmt.Println("Connected!")
+	return db, nil
 }
 
 func getMysqlVars() (idPassword mysqlSecret, err error) {
@@ -162,14 +111,89 @@ func externalIP() (string, error) {
 	return "", errors.New("are you connected to the network?")
 }
 
-func DatabaseConnect(dbname string) (db *mongo.Database) {
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
-	client, err := mongo.Connect(ctx, options.Client().ApplyURI("mongodb://localhost:27017"))
+type Album struct {
+	ID     int64
+	Title  string
+	Artist string
+	Price  float32
+}
+
+// albumsByArtist queries for albums that have the specified artist name.
+func albumsByArtist(name string) ([]Album, error) {
+	db, err := Database()
 	if err != nil {
-		log.Println("database connect error", err)
+		log.Printf("Error %s when opening DB\n", err)
+		return []Album{}, nil
+	}
+
+	// An albums slice to hold data from returned rows.
+	var albums []Album
+
+	rows, err := db.Query("SELECT * FROM album WHERE artist = ?", name)
+	if err != nil {
+		return nil, fmt.Errorf("albumsByArtist %q: %v", name, err)
+	}
+	defer rows.Close()
+	// Loop through rows, using Scan to assign column data to struct fields.
+	for rows.Next() {
+		var alb Album
+		if err := rows.Scan(&alb.ID, &alb.Title, &alb.Artist, &alb.Price); err != nil {
+			return nil, fmt.Errorf("albumsByArtist %q: %v", name, err)
+		}
+		albums = append(albums, alb)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("albumsByArtist %q: %v", name, err)
+	}
+	return albums, nil
+}
+
+func GetAccount(db *sql.DB, id int, name string) (account models.CustomerAccount, err error) {
+	query := `select * from account where id=?, name=?`
+	rows, err := db.Query(query, id, name)
+	if err != nil {
+		log.Println("error occurred while getting account record", err)
 		return
 	}
-	db = client.Database(dbname)
+
+	if !rows.Next() {
+		log.Println("no records found")
+		err = errors.New("no records found")
+		return
+	}
+
+	err = rows.Scan(&account.ID, &account.Name, &account.Phone, &account.Address,
+		&account.OrderID, &account.OrderPlaced, &account.PlacedTime,
+		&account.ReceiveTime, &account.BoyName, &account.InProcess)
+	if err != nil {
+		log.Println("error occurred while decoding rows", err)
+		return
+	}
 	return
+}
+
+func GetAccounts(db *sql.DB, query string) (accounts []models.CustomerAccount, err error) {
+	rows, err := db.Query(query)
+	if err != nil {
+		log.Println("error occurred while getting account records", err)
+		return
+	}
+
+	for rows.Next() {
+		singleAccount := models.CustomerAccount{}
+		err = rows.Scan(&singleAccount.ID, &singleAccount.Name, &singleAccount.Phone, &singleAccount.Address,
+			&singleAccount.OrderID, &singleAccount.OrderPlaced, &singleAccount.PlacedTime,
+			&singleAccount.ReceiveTime, &singleAccount.BoyName, &singleAccount.InProcess)
+		if err != nil {
+			log.Println("error occurred while decoding rows", err)
+			return
+		}
+		accounts = append(accounts, singleAccount)
+	}
+	return
+}
+
+func MyPrint(strs ...string) {
+	log.Println("\n======================================================\n", strs,
+		"\n======================================================")
 }

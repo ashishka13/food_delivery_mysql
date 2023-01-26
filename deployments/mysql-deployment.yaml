@@ -1,55 +1,43 @@
 apiVersion: v1
-kind: Service
+kind: Namespace
 metadata:
-  namespace: karmarkar
-  name: central-mysql-service
-spec:
-  type: ClusterIP
-  ports:
-    - name: "3306"
-      port: 3306
-      targetPort: 3306
-      protocol: TCP
-  selector:
-    tier: mysql
-  clusterIP: 10.97.49.8
+  name: karmarkar
 ---
 apiVersion: v1
-kind: PersistentVolumeClaim
+kind: Service
 metadata:
+  name: mysql
   namespace: karmarkar
-  name: mysql-pv-claim
 spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 4Gi
+  ports:
+  - port: 3306
+  selector:
+    app: mysql
+  clusterIP: None
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
+  name: mysql
   namespace: karmarkar
-  name: central-mysql
 spec:
-  replicas: 1
   selector:
     matchLabels:
-      tier: mysql
+      app: mysql
   strategy:
     type: Recreate
   template:
     metadata:
-      namespace: karmarkar
       labels:
-        tier: mysql
+        app: mysql
     spec:
       containers:
-      - image: mysql:8.0
+      - image: mysql:5.6
         name: mysql
         env:
+          # Use secret in real usage
         - name: MYSQL_ROOT_PASSWORD
-          value: ashish
+          value: password
         ports:
         - containerPort: 3306
           name: mysql
@@ -58,9 +46,41 @@ spec:
           mountPath: /var/lib/mysql
         resources:
           limits:
-            memory: "128Mi"
-            cpu: "500m"
+            memory: 1024Mi
+            cpu: "1"
+          requests:
+            memory: 256Mi
+            cpu: "0.2"
       volumes:
       - name: mysql-persistent-storage
         persistentVolumeClaim:
           claimName: mysql-pv-claim
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: mysql-pv-volume
+  namespace: karmarkar
+  labels:
+    type: local
+spec:
+  storageClassName: manual
+  capacity:
+    storage: 20Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: "/mnt/data"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mysql-pv-claim
+  namespace: karmarkar
+spec:
+  storageClassName: manual
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi

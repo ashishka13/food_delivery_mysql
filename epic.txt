@@ -14,3 +14,12 @@ delivers it to us after some time
 7 restaurant tells delivery guy about ready food
 8 delivery guy starts towards customer = 1 minute go thread
 9 customer gets the food = end of customer wait go thread
+
+customer table
+id name phone address orderid orderplaced placedtime receivedtime boyname inprocess
+
+order table
+id name qty restaurant 
+
+mysql -u root -p 
+my-secret-password
