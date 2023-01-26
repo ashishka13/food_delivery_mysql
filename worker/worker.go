@@ -5,11 +5,34 @@ import (
 	"food_delivery_mysql/models"
 	"food_delivery_mysql/utils"
 	"log"
+	"sync"
 	"time"
 )
 
 func StartWorker() {
-	handleOrders()
+	wg := sync.WaitGroup{}
+	go DeliveryBoy()
+	wg.Add(1)
+
+	go Customer()
+	wg.Add(1)
+
+	go Restaurant()
+	wg.Add(1)
+
+	wg.Wait()
+}
+
+func DeliveryBoy() {
+
+}
+
+func Customer() {
+
+}
+
+func Restaurant() {
+
 }
 
 func handleOrders() {
